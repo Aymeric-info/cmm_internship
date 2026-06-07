@@ -32,10 +32,9 @@ class LoadDataset(Dataset):
 
         try:
             target_str = image_file.split("_")[0]
-            # Utilisation de torch.long pour des labels de classes entiers
             target = torch.tensor(int(target_str), dtype=torch.long)
+            
         except ValueError:
-            # Sécurité si un fichier n'a pas le format attendu
             target = torch.tensor(-1, dtype=torch.long) 
 
         return image, target
