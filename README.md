@@ -1,5 +1,7 @@
 # Synthetic Defect Generation using Diffusion Models
 
+*LAUNCH THE PROJECT IN `current_model` FOLDER TO TRY INFERENCE*
+
 ## 1. Project Overview
 
 * We want to **generate defects on image of materials**. The dataset we're using contains **few positive** samples (the anomalies) and many negative samples (the 'normal' material) because of the scarcity of defects in material inspection.
