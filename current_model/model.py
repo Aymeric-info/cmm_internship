@@ -138,14 +138,19 @@ class Unet(nn.Module):
             nn.SiLU(),
             nn.Linear(2 * time_emb_dim, time_emb_dim)
         )
+
+        # label embedding for finetuning
+        self.label_embedding = nn.Embedding(num_embeddings=27, embedding_dim=time_emb_dim)
         
         self.encoder = Encoder(time_emb_dim, base_channels)
         self.bottleneck_attn = SelfAttention(base_channels * 2)
         self.decoder = Decoder(time_emb_dim, base_channels)
 
-    def forward(self, x, t):
+    def forward(self, x, t, labels):
         t_sinusoidal = self.pos_emb[t]
         t_emb = self.time_mlp(t_sinusoidal)
+        
+        t_emb = t_emb + self.label_embedding(labels)
         
         out, skips = self.encoder(x, t_emb)
         out = self.bottleneck_attn(out)

@@ -1,10 +1,13 @@
 import os
 import torch
-from torch.utils.data import Dataset
-from torchvision import transforms
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, datasets
 from PIL import Image
-from torch.utils.data import DataLoader
+import ssl
 
+ssl._create_default_https_context = ssl._create_unverified_context
+
+"""
 class LoadDataset(Dataset):
     def __init__(self, image_folder, is_grayscale):
         super().__init__()
@@ -58,4 +61,35 @@ def load_data(is_training, data_type, is_grayscale):
 
     
     dataset = LoadDataset(image_folder, is_grayscale)
+    return DataLoader(dataset, batch_size=128, shuffle=True)
+"""
+
+def load_data(is_training, data_type, is_grayscale=True):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.transpose(1, 2))
+    ])
+
+    root_dir = './data'
+
+    if data_type == "normal":
+        split_type = 'digits'
+        target_transform = lambda y: 0
+
+    elif data_type == "anomaly":
+        split_type = 'letters'
+        target_transform = None
+
+    else:
+        raise ValueError("data_type doit être 'normal' ou 'anomaly'.")
+
+    dataset = datasets.EMNIST(
+        root=root_dir,
+        split=split_type,
+        train=is_training,
+        download=True,
+        transform=transform,
+        target_transform=target_transform
+    )
+    
     return DataLoader(dataset, batch_size=128, shuffle=True)

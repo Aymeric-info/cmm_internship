@@ -22,9 +22,11 @@ def train(dataloader, model, time_steps, device, epochs):
     for epoch in range(epochs):
         epoch_loss = 0.0
 
-        for images, _ in dataloader:
+        for images, labels in dataloader:
+            # labels contains a (batch_size,) tensor and is 0 for numbers, 1-26 for letters
             batch_size = images.shape[0]
             images = images.to(device)
+            labels = labels.to(device)
             images = images*2 - 1   # centering on 0
             
             t = torch.randint(low=0, high=time_steps, size=(batch_size,), device=device)
@@ -34,7 +36,7 @@ def train(dataloader, model, time_steps, device, epochs):
             alpha_bar = compute_alpha_bar(t, time_steps)
             x = torch.sqrt(alpha_bar) * images + torch.sqrt(1 - alpha_bar) * eps
             
-            eps_predicted = model(x, t)
+            eps_predicted = model(x, t, labels)
             loss = F.mse_loss(eps_predicted, eps)   # noise prediction
             
             optimizer.zero_grad()

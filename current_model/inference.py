@@ -33,7 +33,7 @@ def compute_ddpm_step(x, eps_predicted, t, max_time_steps, device):
         
     return x_prev
 
-def generate(model, initial_x, start_step, max_time_steps, device, use_lora=True, cfg_scale=3.0):
+def generate(model, initial_x, target_anomaly:int, start_step, max_time_steps, device, use_lora=True, cfg_scale=3.0):
     """
     - use_lora = False -> Model without LoRA
     - use_lora = True, cfg_scale = 1.0 -> LoRA and no guidance
@@ -46,20 +46,25 @@ def generate(model, initial_x, start_step, max_time_steps, device, use_lora=True
 
     with torch.no_grad():
         x = initial_x.clone()
+        batch_size = x.shape[0]
 
         for t in range(start_step - 1, -1, -1):
             if use_cfg:
                 # duplication to then split uncond noise from conditionned noise
                 x_in = torch.cat([x, x], dim=0)
-                t_in = torch.full((x_in.shape[0],), t, device=device, dtype=torch.long)
+                t_in = torch.full((batch_size,), t, device=device, dtype=torch.long)
+                labels_in = torch.cat([torch.zeros(batch_size, dtype=torch.long, device=device), torch.full((batch_size,), target_anomaly, dtype=torch.long, device=device)])
                 
-                eps_preds = model(x_in, t_in)
+                eps_preds = model(x_in, t_in, labels_in)
                 eps_uncond, eps_cond = eps_preds.chunk(2, dim=0)
                 
                 eps_predicted = eps_uncond + cfg_scale * (eps_cond - eps_uncond)
             else:
                 t_tensor = torch.tensor([t], device=device)
-                eps_predicted = model(x, t_tensor)
+                target = target_anomaly if use_lora else 0
+                labels = torch.full((batch_size,), target, dtype=torch.long, device=device)
+
+                eps_predicted = model(x, t_tensor, labels)
 
             x = compute_ddpm_step(x, eps_predicted, t, max_time_steps, device)
             
@@ -68,7 +73,7 @@ def generate(model, initial_x, start_step, max_time_steps, device, use_lora=True
     
     return x
 
-def run_comparative_inference(model, dataloader, start_time, max_time_steps, device):
+def run_comparative_inference(model, target_anomaly, dataloader, start_time, max_time_steps, device):
     """compares LoRA/CFG."""
     model.eval()
 
@@ -85,9 +90,9 @@ def run_comparative_inference(model, dataloader, start_time, max_time_steps, dev
             noise_x = torch.sqrt(alpha_bar) * suspect_images_norm + torch.sqrt(1 - alpha_bar) * eps
             
             # generate imgs
-            img_base = generate(model, noise_x, start_time, max_time_steps, device, use_lora=False)
-            img_lora = generate(model, noise_x, start_time, max_time_steps, device, use_lora=True, cfg_scale=1.0)
-            img_cfg = generate(model, noise_x, start_time, max_time_steps, device, use_lora=True, cfg_scale=4.0)
+            img_base = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=False)
+            img_lora = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=1.0)
+            img_cfg = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=4.0)
 
             # PLOT
             fig, axes = plt.subplots(1, 5, figsize=(15, 3))
