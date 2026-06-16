@@ -12,8 +12,8 @@ else:
 time_emb_dim = 128
 base_channels = 32
 time_steps = 500
-epochs = 100
-finetuning_epochs = 1000
+epochs = 200
+finetuning_epochs = 500
 
 r = 4   # rank for Low Rank Adaptation
 

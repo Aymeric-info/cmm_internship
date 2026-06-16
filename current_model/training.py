@@ -9,7 +9,7 @@ from parameters import time_emb_dim, base_channels, time_steps, device, epochs
 def compute_alpha_bar(t_tensor, time_steps, s=0.008):
     t_ratio = t_tensor.float() / time_steps
     f_t = torch.cos(((t_ratio + s) / (1 + s)) * (torch.pi / 2)).pow(2)
-    f_0 = torch.cos(torch.tensor(s / (1 + s) * (torch.pi / 2))).pow(2)
+    f_0 = torch.cos(torch.tensor(s / (1 + s) * (torch.pi / 2))).pow(2)    
     alpha_bar = f_t / f_0
     return torch.clamp(alpha_bar, min=1e-5, max=1-1e-5).view(-1, 1, 1, 1)
 
@@ -56,7 +56,7 @@ if __name__=="__main__":
 
     model = Unet(time_emb_dim=time_emb_dim, base_channels=base_channels, time_steps=time_steps).to(device)
     
-    dataloader = load_data(is_training=True, data_type="normal", is_grayscale=True)
+    dataloader = load_data(is_training=True, data_type="normal", is_grayscale=True, num_samples=2000)
     train(dataloader, model, time_steps, device, epochs)
 
     save_path = "parameters/ddpm_weights_normal.pth"

@@ -33,7 +33,7 @@ def compute_ddpm_step(x, eps_predicted, t, max_time_steps, device):
         
     return x_prev
 
-def generate(model, initial_x, target_anomaly:int, start_step, max_time_steps, device, use_lora=True, cfg_scale=3.0):
+def generate(model, initial_x, target_anomaly:int, start_step, max_time_steps, device, use_lora=True, cfg_scale=4.0):
     """
     - use_lora = False -> Model without LoRA
     - use_lora = True, cfg_scale = 1.0 -> LoRA and no guidance
@@ -129,4 +129,5 @@ if __name__=="__main__":
     
     dataloader = load_data(is_training=False, data_type="normal", is_grayscale=True)
 
-    run_comparative_inference(model, dataloader, start_time, time_steps, device)
+    target_anomaly = 1
+    run_comparative_inference(model, target_anomaly, dataloader, start_time, time_steps, device)

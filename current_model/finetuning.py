@@ -74,7 +74,7 @@ if __name__=="__main__":
 
     print(f"Finetuning with LoRA on : {device}")
 
-    dataloader = load_data(is_training=True, data_type="anomaly", is_grayscale=True)
+    dataloader = load_data(is_training=True, data_type="anomaly", is_grayscale=True, num_samples=10)
     train(dataloader, model, time_steps, device, finetuning_epochs)
 
     save_path = "parameters/ddpm_weights_lora.pth"
