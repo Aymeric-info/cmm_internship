@@ -140,7 +140,7 @@ class Unet(nn.Module):
         )
 
         # label embedding for finetuning
-        self.label_embedding = nn.Embedding(num_embeddings=27, embedding_dim=time_emb_dim)
+        self.label_embedding = nn.Embedding(num_embeddings=16, embedding_dim=time_emb_dim)
         
         self.encoder = Encoder(time_emb_dim, base_channels)
         self.bottleneck_attn = SelfAttention(base_channels * 2)

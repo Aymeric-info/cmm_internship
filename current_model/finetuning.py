@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
 import math
-from model import Unet
+from torch.utils.data import DataLoader, ConcatDataset
+from model import Unet, ResBlock
 from dataloader import load_data
 from training import train
-from parameters import time_emb_dim, base_channels, time_steps, device, finetuning_epochs, r
+from parameters import time_emb_dim, base_channels, time_steps, device, finetuning_epochs, finetuning_batch_size, r, base_weights_path, get_lora_save_path
 
 
 class LoRAConv2d(nn.Module):
-    def __init__(self, base_conv: nn.Conv2d, r, lora_intensity = 1.0):
+    def __init__(self, base_conv: nn.Conv2d, r, lora_intensity = 16.0):
         super().__init__()
         self.r = r
         self.lora_intensity = lora_intensity
@@ -64,18 +65,39 @@ def inject_lora(model, target_modules=["resblock2", "decoder"]):
         if "lora_" in name:
             param.requires_grad = True
             
+    for param in model.label_embedding.parameters():
+        param.requires_grad = True
+    
+    for param in model.time_mlp.parameters():
+        param.requires_grad = True
+        
+    for module in model.modules():
+        if isinstance(module, ResBlock):
+            for param in module.time_proj.parameters():
+                param.requires_grad = True
+
     return model
 
 if __name__=="__main__":    
-    model = Unet(time_emb_dim, base_channels, time_steps).to(device)
-    model.load_state_dict(torch.load("parameters/ddpm_weights_normal.pth", map_location=device))
+    anomalies_to_train = [1, 2, 3, 4, 5] # A, B, C, D, E
+    
+    for anomaly_idx in anomalies_to_train:
+        print(f"\n--- Finetuning Multi-LoRA : Anomalie {anomaly_idx} ---")
+        
+        model = Unet(time_emb_dim, base_channels, time_steps).to(device)
+        model.load_state_dict(torch.load(base_weights_path, map_location=device))
 
-    model = inject_lora(model).to(device)
+        model = inject_lora(model).to(device)
 
-    print(f"Finetuning with LoRA on : {device}")
+        dataloader = load_data(
+            is_training=True, 
+            data_type="anomaly", 
+            target_anomaly_idx=anomaly_idx,
+            num_samples=30,
+            batch_size=finetuning_batch_size
+        )
 
-    dataloader = load_data(is_training=True, data_type="anomaly", is_grayscale=True, num_samples=10)
-    train(dataloader, model, time_steps, device, finetuning_epochs)
+        train(dataloader, model, time_steps, device, finetuning_epochs)
 
-    save_path = "parameters/ddpm_weights_lora.pth"
-    torch.save(model.state_dict(), save_path)
+        save_path = get_lora_save_path(anomaly_idx)
+        torch.save(model.state_dict(), save_path)

@@ -4,9 +4,9 @@ from model import Unet
 from dataloader import load_data
 from training import compute_alpha_bar
 from finetuning import LoRAConv2d, inject_lora
-from parameters import time_emb_dim, base_channels, device, time_steps, start_time
+from parameters import time_emb_dim, base_channels, device, time_steps, start_time, get_lora_save_path
 
-def set_lora_mode(model, use_lora, use_cfg):
+def set_mode(model, use_lora, use_cfg):
     for module in model.modules():
         if isinstance(module, LoRAConv2d):
             module.use_lora = use_lora
@@ -33,7 +33,7 @@ def compute_ddpm_step(x, eps_predicted, t, max_time_steps, device):
         
     return x_prev
 
-def generate(model, initial_x, target_anomaly:int, start_step, max_time_steps, device, use_lora=True, cfg_scale=4.0):
+def generate(model, initial_x, label, target_anomaly:int, start_step, max_time_steps, device, use_lora=True, cfg_scale=4.0):
     """
     - use_lora = False -> Model without LoRA
     - use_lora = True, cfg_scale = 1.0 -> LoRA and no guidance
@@ -42,27 +42,26 @@ def generate(model, initial_x, target_anomaly:int, start_step, max_time_steps, d
     model.eval()
     
     use_cfg = use_lora and cfg_scale > 1.0
-    set_lora_mode(model, use_lora=use_lora, use_cfg=use_cfg)
+    set_mode(model, use_lora=use_lora, use_cfg=use_cfg)
 
     with torch.no_grad():
         x = initial_x.clone()
-        batch_size = x.shape[0]
 
         for t in range(start_step - 1, -1, -1):
             if use_cfg:
                 # duplication to then split uncond noise from conditionned noise
                 x_in = torch.cat([x, x], dim=0)
-                t_in = torch.full((batch_size,), t, device=device, dtype=torch.long)
-                labels_in = torch.cat([torch.zeros(batch_size, dtype=torch.long, device=device), torch.full((batch_size,), target_anomaly, dtype=torch.long, device=device)])
-                
+                t_in = torch.tensor([t, t], device=device)
+                labels_in = torch.tensor([label, target_anomaly], device=device)
+
                 eps_preds = model(x_in, t_in, labels_in)
                 eps_uncond, eps_cond = eps_preds.chunk(2, dim=0)
                 
                 eps_predicted = eps_uncond + cfg_scale * (eps_cond - eps_uncond)
             else:
                 t_tensor = torch.tensor([t], device=device)
-                target = target_anomaly if use_lora else 0
-                labels = torch.full((batch_size,), target, dtype=torch.long, device=device)
+                target = target_anomaly if use_lora else label
+                labels = torch.tensor([target], device=device)
 
                 eps_predicted = model(x, t_tensor, labels)
 
@@ -78,7 +77,7 @@ def run_comparative_inference(model, target_anomaly, dataloader, start_time, max
     model.eval()
 
     with torch.no_grad():
-        for suspect_images, _ in dataloader:
+        for suspect_images, label in dataloader:
             suspect_images = suspect_images.to(device)
             suspect_images = suspect_images[0].unsqueeze(0) 
             suspect_images_norm = suspect_images * 2.0 - 1.0 
@@ -90,9 +89,9 @@ def run_comparative_inference(model, target_anomaly, dataloader, start_time, max
             noise_x = torch.sqrt(alpha_bar) * suspect_images_norm + torch.sqrt(1 - alpha_bar) * eps
             
             # generate imgs
-            img_base = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=False)
-            img_lora = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=1.0)
-            img_cfg = generate(model, noise_x, target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=4.0)
+            img_base = generate(model, noise_x, label[0], target_anomaly, start_time, max_time_steps, device, use_lora=False)
+            img_lora = generate(model, noise_x, label[0], target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=1.0)
+            img_cfg = generate(model, noise_x, label[0], target_anomaly, start_time, max_time_steps, device, use_lora=True, cfg_scale=4.0)
 
             # PLOT
             fig, axes = plt.subplots(1, 5, figsize=(15, 3))
@@ -122,12 +121,17 @@ def run_comparative_inference(model, target_anomaly, dataloader, start_time, max
             break
 
 if __name__=="__main__":    
+    target_anomaly = 1
+
+    target_label = target_anomaly + 9
     model = Unet(time_emb_dim, base_channels, time_steps)
     model = inject_lora(model)
-    model.load_state_dict(torch.load("parameters/ddpm_weights_lora.pth", map_location=device))
+    
+    lora_path = get_lora_save_path(target_anomaly)
+    model.load_state_dict(torch.load(lora_path, map_location=device))
     model.to(device)
     
-    dataloader = load_data(is_training=False, data_type="normal", is_grayscale=True)
+    dataloader = load_data(is_training=False, data_type="normal")
 
-    target_anomaly = 1
-    run_comparative_inference(model, target_anomaly, dataloader, start_time, time_steps, device)
+    print(f"Génération du défaut index {target_anomaly}...")
+    run_comparative_inference(model, target_label, dataloader, start_time, time_steps, device)

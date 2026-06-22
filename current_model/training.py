@@ -15,7 +15,8 @@ def compute_alpha_bar(t_tensor, time_steps, s=0.008):
 
 
 def train(dataloader, model, time_steps, device, epochs):
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)    
+    active_params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = optim.Adam(active_params, lr=1e-4)    
     model.train()
     num_batches = len(dataloader)
 
@@ -56,7 +57,7 @@ if __name__=="__main__":
 
     model = Unet(time_emb_dim=time_emb_dim, base_channels=base_channels, time_steps=time_steps).to(device)
     
-    dataloader = load_data(is_training=True, data_type="normal", is_grayscale=True, num_samples=2000)
+    dataloader = load_data(is_training=True, data_type="normal", is_grayscale=True, num_samples=2000, uncond_prob=0.1)
     train(dataloader, model, time_steps, device, epochs)
 
     save_path = "parameters/ddpm_weights_normal.pth"
